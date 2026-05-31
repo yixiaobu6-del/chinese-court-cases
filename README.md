@@ -1,17 +1,17 @@
 # 中国裁判文书网浏览器
 
-[![HTML](https://img.shields.io/badge/HTML-standalone-orange)]()
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-blue)]()
+想找案例参考？
+**浏览器帮你100个真实案例、对比分析。**
 
-中国法院裁判文书浏览与分析工具。
+[![HTML](https://img.shields.io/badge/打开即用-无需安装-orange)]()
 
-## 功能
+## 案例不再"难找"
 
-- **案例库**：100 个真实裁判案例
+- **案例库**：100个真实裁判案例
 - **收藏系统**：收藏感兴趣的案例
-- **案例对比**：3 个案例 × 10 个维度对比
+- **案例对比**：3个案例×10个维度对比
 - **搜索筛选**：按案由/法院/日期筛选
 
-## 使用
+## 怎么用
 
-打开 `web/browser.html` 即可使用。
+打开 `web/browser.html` → 搜索/浏览案例 → 对比分析
