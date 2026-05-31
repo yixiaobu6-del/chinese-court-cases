@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>中国裁判文书网 - 案例浏览器</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#f0f4f8; font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif; }
+.case-card { transition:all .2s; cursor:pointer; }
+.case-card:hover { transform:translateY(-2px); box-shadow:0 8px 25px rgba(0,0,0,0.08); }
+.highlight { background:#fef08a; padding:0 2px; border-radius:2px; }
+.tag { display:inline-block; padding:1px 10px; border-radius:12px; font-size:12px; }
+.tag-minshi { background:#dbeafe; color:#1d4ed8; }
+.tag-xingshi { background:#fce7f3; color:#be185d; }
+.tag-xingzheng { background:#d1fae5; color:#047857; }
+.tag-zhishi { background:#fef3c7; color:#b45309; }
+.detail-section { border-left:3px solid; padding-left:12px; margin-bottom:16px; }
+.reco-card { transition:all .2s; cursor:pointer; }
+.reco-card:hover { background:#f0fdf4; }
+.scrollbar-thin::-webkit-scrollbar { width:4px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:2px; }
+</style>
+</head>
+<body>
+<nav class="bg-gradient-to-r from-blue-800 to-indigo-900 text-white p-4 shadow-lg sticky top-0 z-30">
+  <div class="max-w-6xl mx-auto flex items-center justify-between">
+    <h1 class="text-xl font-bold"><i class="fa fa-gavel mr-2"></i>中国裁判文书查询</h1>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-blue-200"><i class="fa fa-database mr-1"></i><span id="totalCases">0</span> 个案例</span>
+      <button onclick="showFavorites()" class="text-sm text-yellow-300 hover:text-yellow-100"><i class="fa fa-star mr-1"></i>我的收藏</button>
+      <button onclick="showCompare()" class="text-sm text-green-300 hover:text-green-100"><i class="fa fa-columns mr-1"></i>对比 (<span id="compareCount">0</span>)</button>
+    </div>
+  </div>
+</nav>
+
+<div class="max-w-6xl mx-auto p-4">
+  <!-- 搜索区 -->
+  <div class="bg-white rounded-xl shadow-sm p-5 mb-6 border border-slate-200">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div class="md:col-span-2">
+        <label class="block text-xs text-slate-500 mb-1"><i class="fa fa-search mr-1"></i>关键词搜索</label>
+        <input type="text" id="searchInput" class="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="搜索案由、当事人、法院...">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1"><i class="fa fa-tag mr-1"></i>案件类型</label>
+        <select id="typeFilter" class="w-full border rounded-lg p-2.5 text-sm outline-none">
+          <option value="">全部类型</option>
+          <option value="民事">民事</option>
+          <option value="刑事">刑事</option>
+          <option value="行政">行政</option>
+          <option value="知识产权">知识产权</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1"><i class="fa fa-map-marker mr-1"></i>地区</label>
+        <select id="regionFilter" class="w-full border rounded-lg p-2.5 text-sm outline-none">
+          <option value="">全部地区</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-3">
+      <button onclick="search()" class="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm"><i class="fa fa-search mr-1"></i>搜索</button>
+      <button onclick="resetSearch()" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 text-sm"><i class="fa fa-undo mr-1"></i>重置</button>
+      <span class="text-xs text-slate-400 self-center ml-auto" id="resultInfo">共 <strong id="resultCount">0</strong> 条结果</span>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- 左侧：搜索结果 -->
+    <div class="lg:col-span-2">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+          <h3 class="font-bold text-slate-700"><i class="fa fa-list mr-1 text-blue-600"></i>搜索结果</h3>
+          <span class="text-xs text-slate-400" id="caseCount">0 条</span>
+        </div>
+        <div id="resultList" class="p-4 space-y-3 max-h-[700px] overflow-y-auto scrollbar-thin"></div>
+      </div>
+    </div>
+
+    <!-- 右侧：详情 -->
+    <div class="lg:col-span-1">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 sticky" style="top:84px">
+        <div class="px-5 py-3 border-b border-slate-100">
+          <h3 class="font-bold text-slate-700"><i class="fa fa-file-text-o mr-1 text-blue-600"></i>案例详情</h3>
+        </div>
+        <div id="detailArea" class="p-5 min-h-[400px] max-h-[700px] overflow-y-auto scrollbar-thin">
+          <div class="text-center py-12 text-slate-400">
+            <i class="fa fa-balance-scale text-4xl mb-3 block text-slate-200"></i>
+            <p class="text-sm">点击左侧案例查看详情</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 收藏夹弹窗 -->
+  <div id="favoritesModal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-yellow-50">
+        <h3 class="font-bold text-yellow-700"><i class="fa fa-star mr-2"></i>我的收藏</h3>
+        <button onclick="closeFavorites()" class="text-slate-400 hover:text-slate-600"><i class="fa fa-times"></i></button>
+      </div>
+      <div id="favoritesList" class="p-4 space-y-3 max-h-[60vh] overflow-y-auto scrollbar-thin"></div>
+      <div id="favoritesEmpty" class="p-8 text-center text-slate-400 hidden">
+        <i class="fa fa-star-o text-3xl mb-2 block text-slate-200"></i>
+        <p class="text-sm">暂无收藏的案例</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 案例对比弹窗 -->
+  <div id="compareModal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-xl max-w-5xl w-full mx-4 max-h-[80vh] overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-green-50">
+        <h3 class="font-bold text-green-700"><i class="fa fa-columns mr-2"></i>案例对比分析</h3>
+        <button onclick="closeCompare()" class="text-slate-400 hover:text-slate-600"><i class="fa fa-times"></i></button>
+      </div>
+      <div id="compareContent" class="p-4 overflow-y-auto max-h-[70vh] scrollbar-thin"></div>
+    </div>
+  </div>
+
+<script>
+// ============================================================
+// 50+ 案例数据 (从现有JSON提取并扩充)
+// ============================================================
+const CASES = [
+  { id:"c001", title:"李某与张某民间借贷纠纷案", court:"北京市朝阳区人民法院", case_type:"民事", cause:"民间借贷纠纷", plaintiff:"李某", defendant:"张某", judge_date:"2023-03-15", judgment:"被告张某于本判决生效之日起十日内偿还原告李某借款本金人民币50万元及利息。", reasoning:"原告李某与被告张某之间的借贷关系成立，有借条、转账记录为证。被告未按约定还款，构成违约。", legal_basis:["《中华人民共和国民法典》第六百六十七条","《中华人民共和国民法典》第六百七十五条"], amount:"50万元", region:"北京", summary:"李某出借50万元给张某，张某逾期未还，法院判决张某偿还本金及利息。" },
+  { id:"c002", title:"王某诉某科技公司劳动争议案", court:"上海市浦东新区人民法院", case_type:"民事", cause:"劳动争议", plaintiff:"王某", defendant:"某科技公司", judge_date:"2023-05-20", judgment:"被告某科技公司支付原告王某违法解除劳动合同赔偿金12万元及未休年假工资8000元。", reasoning:"被告以绩效考核不合格为由解除劳动合同，但未能提供充分证据证明考核制度的合法性和合理性，构成违法解除。", legal_basis:["《中华人民共和国劳动合同法》第四十七条","《中华人民共和国劳动合同法》第八十七条"], amount:"12.8万元", region:"上海", summary:"科技公司以绩效不合格解除王某劳动合同，因无法证明考核合法性被认定为违法解除。" },
+  { id:"c003", title:"赵某故意伤害案", court:"广州市中级人民法院", case_type:"刑事", cause:"故意伤害罪", plaintiff:"检察院", defendant:"赵某", judge_date:"2023-02-10", judgment:"被告人赵某犯故意伤害罪，判处有期徒刑三年，缓刑四年。", reasoning:"被告人赵某因邻里纠纷持械伤人，致被害人轻伤一级。案后自首并赔偿被害人损失取得谅解，依法从轻处罚。", legal_basis:["《中华人民共和国刑法》第二百三十四条","《中华人民共和国刑法》第六十七条"], amount:"", region:"广东", summary:"赵某因邻里纠纷伤人致轻伤，因自首并赔偿取得谅解被判缓刑。" },
+  { id:"c004", title:"某房地产公司诉李某商品房买卖合同纠纷案", court:"深圳市宝安区人民法院", case_type:"民事", cause:"买卖合同纠纷", plaintiff:"某房地产公司", defendant:"李某", judge_date:"2023-04-18", judgment:"解除双方签订的商品房预售合同，被告李某向原告支付违约金15万元。", reasoning:"被告李某在签订合同后未按约定支付首付款，经催告后在合理期限内仍未履行，构成根本违约。", legal_basis:["《中华人民共和国民法典》第五百六十三条","《中华人民共和国民法典》第五百七十七条"], amount:"15万元", region:"广东", summary:"李某购房后未按时支付首付款，开发商诉请解除合同获支持。" },
+  { id:"c005", title:"陈某与某保险公司保险合同纠纷案", court:"成都市武侯区人民法院", case_type:"民事", cause:"保险合同纠纷", plaintiff:"陈某", defendant:"某保险公司", judge_date:"2023-06-02", judgment:"被告某保险公司支付原告陈某保险金20万元。", reasoning:"原告陈某投保重大疾病险后确诊恶性肿瘤，属于保险合同约定的赔付范围。被告以投保时未如实告知为由拒赔，但未证明原告存在故意或重大过失。", legal_basis:["《中华人民共和国保险法》第十六条","《中华人民共和国保险法》第二十三条"], amount:"20万元", region:"四川", summary:"陈某患癌后保险公司以未如实告知为由拒赔，法院判决保险公司赔付保险金。" },
+  { id:"c006", title:"刘某诉某公安局行政处罚案", court:"南京市中级人民法院", case_type:"行政", cause:"行政处罚", plaintiff:"刘某", defendant:"某公安局", judge_date:"2023-01-25", judgment:"撤销被告某公安局作出的行政处罚决定。", reasoning:"被告以聚众扰乱公共秩序为由对原告作出行政拘留10日的处罚。但被告提供的证据不足以证明原告实施了扰乱秩序的行为，主要证据不足。", legal_basis:["《中华人民共和国行政诉讼法》第七十条"], amount:"", region:"江苏", summary:"刘某因证据不足被撤销行政处罚，法院认定公安机关主要证据不足。" },
+  { id:"c007", title:"周某与某银行信用卡纠纷案", court:"杭州市上城区人民法院", case_type:"民事", cause:"信用卡纠纷", plaintiff:"某银行", defendant:"周某", judge_date:"2023-03-28", judgment:"被告周某偿还原告某银行信用卡透支本金8万元及利息、违约金。", reasoning:"被告周某使用信用卡消费后未按期还款，截至起诉时共透支本金8万元。银行多次催收未果。", legal_basis:["《中华人民共和国民法典》第六百七十四条","《中华人民共和国民法典》第六百七十五条"], amount:"8万元", region:"浙江", summary:"周某信用卡透支8万元逾期未还，银行诉请还款获支持。" },
+  { id:"c008", title:"吴某交通肇事案", court:"武汉市洪山区人民法院", case_type:"刑事", cause:"交通肇事罪", plaintiff:"检察院", defendant:"吴某", judge_date:"2023-07-15", judgment:"被告人吴某犯交通肇事罪，判处有期徒刑一年六个月，缓刑二年。", reasoning:"被告人吴某酒后驾驶机动车撞伤行人致一人重伤。事故发生后吴某积极救助伤者并赔偿损失，取得被害人谅解。", legal_basis:["《中华人民共和国刑法》第一百三十三条","《中华人民共和国刑法》第七十二条"], amount:"", region:"湖北", summary:"吴某酒驾肇事致人重伤，因积极赔偿获谅解被判缓刑。" },
+  { id:"c009", title:"某物业公司诉业主物业服务合同纠纷案", court:"西安市雁塔区人民法院", case_type:"民事", cause:"物业服务合同纠纷", plaintiff:"某物业公司", defendant:"业主委员会", judge_date:"2023-04-05", judgment:"被告业主委员会支付原告物业公司物业服务费45万元。", reasoning:"原告物业公司依约为小区提供物业服务，被告业主委员会及全体业主接受了服务。部分业主以服务不达标为由拒交物业费，但未提供充分证据。", legal_basis:["《中华人民共和国民法典》第九百四十四条","《中华人民共和国民法典》第五百七十七条"], amount:"45万元", region:"陕西", summary:"业主以服务不达标为由拒交物业费，因证据不足被判全额支付。" },
+  { id:"c010", title:"黄某诉某电商平台网络购物合同纠纷案", court:"杭州市余杭区人民法院", case_type:"民事", cause:"网络购物合同纠纷", plaintiff:"黄某", defendant:"某电商平台", judge_date:"2023-08-12", judgment:"被告某电商平台退还原告黄某货款2999元，并支付三倍赔偿金8997元。", reasoning:"原告黄某在被告平台购买手机，收货后发现为翻新机。被告作为平台经营者未能提供销售者真实信息，且平台自营商品存在欺诈行为。", legal_basis:["《中华人民共和国消费者权益保护法》第五十五条"], amount:"11996元", region:"浙江", summary:"电商平台销售翻新机被认定为欺诈，被判退一赔三。" },
+  { id:"c011", title:"杨某非法吸收公众存款案", court:"天津市第一中级人民法院", case_type:"刑事", cause:"非法吸收公众存款罪", plaintiff:"检察院", defendant:"杨某", judge_date:"2023-05-30", judgment:"被告人杨某犯非法吸收公众存款罪，判处有期徒刑五年，并处罚金人民币20万元。", reasoning:"被告人杨某以投资养老项目为名，通过口口相传的方式向社会不特定对象吸收资金，累计吸收金额达500余万元，造成投资人损失300余万元。", legal_basis:["《中华人民共和国刑法》第一百七十六条"], amount:"500万元", region:"天津", summary:"杨某以养老项目为名非法吸收公众存款500余万元被判刑。" },
+  { id:"c012", title:"某建筑公司诉某开发公司建设工程合同纠纷案", court:"长沙市雨花区人民法院", case_type:"民事", cause:"建设工程合同纠纷", plaintiff:"某建筑公司", defendant:"某开发公司", judge_date:"2023-06-20", judgment:"被告某开发公司支付原告某建筑公司工程款380万元及逾期付款利息。", reasoning:"原告按约完成了工程建设，工程经竣工验收合格。被告以工程质量存在瑕疵为由拒付工程款，但未在合理期限内提出异议。", legal_basis:["《中华人民共和国民法典》第七百九十九条","《中华人民共和国民法典》第八百零七条"], amount:"380万元", region:"湖南", summary:"开发公司以质量瑕疵为由拒付工程款，因未及时提出异议被判支付。" },
+  { id:"c013", title:"马某诉某医院医疗损害责任纠纷案", court:"重庆市渝中区人民法院", case_type:"民事", cause:"医疗损害责任纠纷", plaintiff:"马某", defendant:"某医院", judge_date:"2023-09-08", judgment:"被告某医院赔偿原告马某医疗费、误工费、精神损害抚慰金等共计35万元。", reasoning:"被告医院在为原告进行手术过程中存在操作不当，导致原告术后出现严重并发症。经司法鉴定，医院的医疗行为与原告的损害后果之间存在因果关系。", legal_basis:["《中华人民共和国民法典》第一千二百一十八条","《中华人民共和国民法典》第一千二百二十一条"], amount:"35万元", region:"重庆", summary:"医院手术操作不当致患者并发症，被判赔偿35万元。" },
+  { id:"c014", title:"郑某诉某市自然资源局土地登记案", court:"郑州市中级人民法院", case_type:"行政", cause:"土地登记纠纷", plaintiff:"郑某", defendant:"某市自然资源局", judge_date:"2023-04-22", judgment:"责令被告某市自然资源局对原告郑某的土地登记申请重新作出处理。", reasoning:"被告对原告提交的土地登记申请逾期未作出处理决定，也未说明理由，构成行政不作为。", legal_basis:["《中华人民共和国行政诉讼法》第七十二条"], amount:"", region:"河南", summary:"自然资源局对土地登记申请逾期未处理被责令重新处理。" },
+  { id:"c015", title:"孙某诉某教育培训公司合同纠纷案", court:"北京市海淀区人民法院", case_type:"民事", cause:"教育培训合同纠纷", plaintiff:"孙某", defendant:"某教育培训公司", judge_date:"2023-07-25", judgment:"解除教育培训合同，被告某教育培训公司退还原告孙某培训费2.8万元。", reasoning:"被告承诺的师资条件与实际不符，构成违约。原告据此主张解除合同并要求退费，于法有据。", legal_basis:["《中华人民共和国民法典》第五百六十三条","《中华人民共和国民法典》第五百七十七条"], amount:"2.8万元", region:"北京", summary:"教育机构师资不符承诺，学员诉请退费获支持。" },
+  { id:"c016", title:"钱某盗窃案", court:"苏州市吴江区人民法院", case_type:"刑事", cause:"盗窃罪", plaintiff:"检察院", defendant:"钱某", judge_date:"2023-08-20", judgment:"被告人钱某犯盗窃罪，判处有期徒刑八个月，并处罚金人民币5000元。", reasoning:"被告人钱某多次在商场实施扒窃，盗窃财物总价值约1.2万元。被告人有盗窃前科，依法从重处罚。", legal_basis:["《中华人民共和国刑法》第二百六十四条"], amount:"1.2万元", region:"江苏", summary:"钱某多次商场扒窃价值1.2万元，因有前科从重处罚。" },
+  { id:"c017", title:"某供应链公司诉某贸易公司买卖合同纠纷案", court:"宁波市海曙区人民法院", case_type:"民事", cause:"买卖合同纠纷", plaintiff:"某供应链公司", defendant:"某贸易公司", judge_date:"2023-10-12", judgment:"被告某贸易公司支付原告货款156万元及逾期付款违约金。", reasoning:"原告按约向被告供应货物，被告收货后未按约定支付货款。经催讨仍拒不支付，构成违约。", legal_basis:["《中华人民共和国民法典》第六百二十六条","《中华人民共和国民法典》第五百七十七条"], amount:"156万元", region:"浙江", summary:"贸易公司收货后拒不付款，供应链公司诉请付款获支持。" },
+  { id:"c018", title:"林某诉某餐饮公司人身损害赔偿案", court:"厦门市思明区人民法院", case_type:"民事", cause:"人身损害赔偿纠纷", plaintiff:"林某", defendant:"某餐饮公司", judge_date:"2023-06-15", judgment:"被告某餐饮公司赔偿原告林某医疗费、护理费等共计8.5万元。", reasoning:"原告在被告餐厅用餐时因地面湿滑摔倒致骨折。被告未设置警示标志，也未及时清理地面，未尽到安全保障义务。", legal_basis:["《中华人民共和国民法典》第一千一百九十八条"], amount:"8.5万元", region:"福建", summary:"餐厅地面湿滑致顾客摔伤，因未尽安全保障义务被判赔偿。" },
+  { id:"c019", title:"何某诉某快递公司服务合同纠纷案", court:"武汉市东西湖区人民法院", case_type:"民事", cause:"服务合同纠纷", plaintiff:"何某", defendant:"某快递公司", judge_date:"2023-09-22", judgment:"被告某快递公司赔偿原告何某货物损失2万元。", reasoning:"原告委托被告运输价值3万元的电子产品，货物在运输途中丢失。被告未按照保价金额足额赔偿。", legal_basis:["《中华人民共和国民法典》第八百三十二条","《中华人民共和国民法典》第八百三十三条"], amount:"2万元", region:"湖北", summary:"快递公司运输途中丢失货物被判按保价金额赔偿。" },
+  { id:"c020", title:"罗某诉某区政府房屋征收补偿案", court:"广州市中级人民法院", case_type:"行政", cause:"房屋征收补偿纠纷", plaintiff:"罗某", defendant:"某区政府", judge_date:"2023-11-05", judgment:"被告某区政府增加支付原告罗某房屋征收补偿款52万元。", reasoning:"被告在征收原告房屋时，未对房屋内的装修装饰及附属设施进行充分评估，补偿标准明显偏低。", legal_basis:["《国有土地上房屋征收与补偿条例》第十九条","《中华人民共和国行政诉讼法》第七十条"], amount:"52万元", region:"广东", summary:"房屋征收补偿标准偏低，法院判决增加补偿52万元。" },
+  { id:"c021", title:"高某危险驾驶案", court:"合肥市包河区人民法院", case_type:"刑事", cause:"危险驾驶罪", plaintiff:"检察院", defendant:"高某", judge_date:"2023-10-18", judgment:"被告人高某犯危险驾驶罪，判处拘役三个月，并处罚金人民币6000元。", reasoning:"被告人高某在道路上醉酒驾驶机动车，血液酒精含量为150mg/100ml。被告人归案后如实供述，认罪认罚。", legal_basis:["《中华人民共和国刑法》第一百三十三条之一"], amount:"", region:"安徽", summary:"高某醉驾血液酒精含量150mg/100ml，被判拘役并处罚金。" },
+  { id:"c022", title:"某设计公司诉某地产公司设计合同纠纷案", court:"天津市南开区人民法院", case_type:"民事", cause:"设计合同纠纷", plaintiff:"某设计公司", defendant:"某地产公司", judge_date:"2023-08-30", judgment:"被告某地产公司支付原告设计费95万元及逾期付款违约金。", reasoning:"原告按约为被告提供了建筑设计方案，被告已实际使用。被告以方案未达到预期效果为由拒付设计费，但合同未约定设计效果标准。", legal_basis:["《中华人民共和国民法典》第七百八十二条","《中华人民共和国民法典》第五百七十七条"], amount:"95万元", region:"天津", summary:"地产公司使用设计方案后以效果不佳拒付费被判支付。" },
+  { id:"c023", title:"朱某诉某旅行社旅游合同纠纷案", court:"昆明市官渡区人民法院", case_type:"民事", cause:"旅游合同纠纷", plaintiff:"朱某", defendant:"某旅行社", judge_date:"2023-12-01", judgment:"被告某旅行社退还原告朱某旅游费用1.2万元，并赔偿违约金5000元。", reasoning:"被告擅自变更旅游行程，取消合同约定的多个景点，且安排的住宿条件与合同约定不符。", legal_basis:["《中华人民共和国旅游法》第六十九条","《中华人民共和国民法典》第五百七十七条"], amount:"1.7万元", region:"云南", summary:"旅行社擅自变更行程取消景点，被判退款并赔偿。" },
+  { id:"c024", title:"徐某诉某网络公司隐私权纠纷案", court:"北京市互联网法院", case_type:"民事", cause:"隐私权纠纷", plaintiff:"徐某", defendant:"某网络公司", judge_date:"2023-11-20", judgment:"被告某网络公司赔偿原告徐某精神损害抚慰金1万元，并在其App首页刊登道歉声明。", reasoning:"被告开发的App在未取得原告明确同意的情况下，收集并使用了原告的位置信息、通讯录信息，侵犯了原告的隐私权。", legal_basis:["《中华人民共和国民法典》第一千零三十二条","《中华人民共和国民法典》第一千零三十三条"], amount:"1万元", region:"北京", summary:"App未经同意收集位置和通讯录信息被判侵犯隐私权。" },
+  { id:"c025", title:"某商贸公司诉某物流公司运输合同纠纷案", court:"济南市历下区人民法院", case_type:"民事", cause:"运输合同纠纷", plaintiff:"某商贸公司", defendant:"某物流公司", judge_date:"2023-10-25", judgment:"被告某物流公司赔偿原告某商贸公司货物损失28万元。", reasoning:"原告委托被告运输一批精密仪器，被告在运输过程中发生交通事故，导致货物严重损毁。被告未能证明存在免责事由。", legal_basis:["《中华人民共和国民法典》第八百三十二条"], amount:"28万元", region:"山东", summary:"物流公司运输途中发生事故致货物损毁被判全额赔偿。" },
+  { id:"c026", title:"唐某故意杀人案", court:"四川省高级人民法院", case_type:"刑事", cause:"故意杀人罪", plaintiff:"检察院", defendant:"唐某", judge_date:"2023-12-15", judgment:"被告人唐某犯故意杀人罪，判处死刑，缓期二年执行，剥夺政治权利终身。", reasoning:"被告人唐某因情感纠纷持刀行凶，致一人死亡。犯罪手段残忍，后果严重。鉴于被告人有自首情节，且被害人存在一定过错，依法从轻处罚。", legal_basis:["《中华人民共和国刑法》第二百三十二条","《中华人民共和国刑法》第四十八条","《中华人民共和国刑法》第六十七条"], amount:"", region:"四川", summary:"唐某因情感纠纷杀人，因自首和被害人过错被判死缓。" },
+  { id:"c027", title:"某广告公司诉某科技公司服务合同纠纷案", court:"深圳市南山区人民法院", case_type:"民事", cause:"服务合同纠纷", plaintiff:"某广告公司", defendant:"某科技公司", judge_date:"2024-01-10", judgment:"被告某科技公司支付原告广告服务费68万元。", reasoning:"原告为被告提供了线上推广服务，推广效果达到了合同约定的关键指标。被告以未达到预期销售目标为由拒付费用。", legal_basis:["《中华人民共和国民法典》第五百七十七条","《中华人民共和国民法典》第五百七十九条"], amount:"68万元", region:"广东", summary:"科技公司以未达销售目标拒付广告费被判全额支付。" },
+  { id:"c028", title:"刘某诉某市人社局工伤认定案", court:"福州市鼓楼区人民法院", case_type:"行政", cause:"工伤认定纠纷", plaintiff:"刘某", defendant:"某市人社局", judge_date:"2024-01-22", judgment:"撤销被告作出的不予认定工伤决定，责令被告重新作出认定。", reasoning:"原告在加班回家途中发生非本人主要责任的交通事故受伤。被告以加班未获批准为由不予认定工伤，但原告加班系因工作需要。", legal_basis:["《工伤保险条例》第十四条","《中华人民共和国行政诉讼法》第七十条"], amount:"", region:"福建", summary:"加班回家途中车祸受伤，法院认定应属工伤。" },
+  { id:"c029", title:"某食品公司诉某超市买卖合同纠纷案", court:"南昌市西湖区人民法院", case_type:"民事", cause:"买卖合同纠纷", plaintiff:"某食品公司", defendant:"某超市", judge_date:"2024-02-15", judgment:"被告某超市支付原告货款22万元及逾期付款利息。", reasoning:"原告向被告超市供应食品，双方签订年度供货合同。被告收货后在合同约定期限内未支付货款。", legal_basis:["《中华人民共和国民法典》第六百二十六条","《中华人民共和国民法典》第五百七十七条"], amount:"22万元", region:"江西", summary:"超市收货后逾期不付货款被判支付货款及利息。" },
+  { id:"c030", title:"方某诉某房地产公司房屋质量纠纷案", court:"合肥市蜀山区人民法院", case_type:"民事", cause:"房屋质量纠纷", plaintiff:"方某", defendant:"某房地产公司", judge_date:"2024-03-01", judgment:"被告某房地产公司赔偿原告方某房屋维修费用12万元及租金损失3万元。", reasoning:"原告购买的房屋在交付后出现严重渗漏水问题，经鉴定系施工质量不合格所致。被告未在合理期限内完成维修。", legal_basis:["《中华人民共和国民法典》第六百一十七条","《中华人民共和国民法典》第五百七十七条"], amount:"15万元", region:"安徽", summary:"新房严重渗漏系施工质量问题，开发商被判赔偿维修费及租金损失。" },
+  { id:"c031", title:"某纺织公司诉某服装公司承揽合同纠纷案", court:"杭州市萧山区人民法院", case_type:"民事", cause:"承揽合同纠纷", plaintiff:"某纺织公司", defendant:"某服装公司", judge_date:"2024-03-12", judgment:"被告某服装公司支付原告加工费135万元。", reasoning:"原告按约为被告加工面料，被告收货后已将面料用于生产。被告以面料存在色差为由拒付加工费，但未在检验期内提出异议。", legal_basis:["《中华人民共和国民法典》第七百八十条","《中华人民共和国民法典》第七百八十二条"], amount:"135万元", region:"浙江", summary:"服装公司未在检验期内对面料质量提出异议被判支付加工费。" },
+  { id:"c032", title:"谭某诈骗案", court:"长沙市芙蓉区人民法院", case_type:"刑事", cause:"诈骗罪", plaintiff:"检察院", defendant:"谭某", judge_date:"2024-02-28", judgment:"被告人谭某犯诈骗罪，判处有期徒刑四年，并处罚金人民币10万元。", reasoning:"被告人谭某虚构投资项目，以高额回报为诱饵骗取多名被害人投资款共计80余万元。所得款项被其挥霍。", legal_basis:["《中华人民共和国刑法》第二百六十六条"], amount:"80万元", region:"湖南", summary:"谭某虚构投资项目骗取80余万元被判诈骗罪入刑四年。" },
+  { id:"c033", title:"张某诉某装修公司装饰装修合同纠纷案", court:"青岛市市南区人民法院", case_type:"民事", cause:"装饰装修合同纠纷", plaintiff:"张某", defendant:"某装修公司", judge_date:"2024-03-20", judgment:"解除装修合同，被告某装修公司退还原告张某装修预付款8万元。", reasoning:"被告在签订合同收取预付款后，未按约定时间进场施工，经原告多次催告仍不履行合同义务，构成根本违约。", legal_basis:["《中华人民共和国民法典》第五百六十三条","《中华人民共和国民法典》第五百七十七条"], amount:"8万元", region:"山东", summary:"装修公司收预付款后不进场施工被判解除合同退还款项。" },
+  { id:"c034", title:"某投资公司诉某科技公司股权转让纠纷案", court:"北京市第三中级人民法院", case_type:"民事", cause:"股权转让纠纷", plaintiff:"某投资公司", defendant:"某科技公司", judge_date:"2024-04-05", judgment:"被告某科技公司支付原告股权转让款500万元及违约金。", reasoning:"双方签订股权转让协议后，原告按约支付了股权转让款并完成了工商变更登记。被告未按约定支付剩余转让款。", legal_basis:["《中华人民共和国民法典》第五百七十七条","《中华人民共和国公司法》第七十一条"], amount:"500万元", region:"北京", summary:"科技公司未按约支付股权转让尾款被判支付500万元及违约金。" },
+  { id:"c035", title:"潘某诉某旅游公司人身损害赔偿案", court:"桂林市秀峰区人民法院", case_type:"民事", cause:"人身损害赔偿纠纷", plaintiff:"潘某", defendant:"某旅游公司", judge_date:"2024-04-18", judgment:"被告某旅游公司赔偿原告潘某医疗费、残疾赔偿金等共计42万元。", reasoning:"原告参加被告组织的漂流项目时，因安全设施不完善导致受伤，经鉴定构成九级伤残。被告未尽到安全保障义务。", legal_basis:["《中华人民共和国民法典》第一千一百九十八条","《中华人民共和国民法典》第一千一百七十九条"], amount:"42万元", region:"广西", summary:"漂流安全设施不完善致游客九级伤残，旅游公司被判赔偿42万元。" },
+  { id:"c036", title:"某银行诉某公司金融借款合同纠纷案", court:"上海市第一中级人民法院", case_type:"民事", cause:"金融借款合同纠纷", plaintiff:"某银行", defendant:"某公司", judge_date:"2024-04-22", judgment:"被告某公司偿还原告借款本金1000万元及利息、罚息。", reasoning:"被告向原告借款1000万元用于经营周转，以其厂房设定抵押。借款到期后被告未按约还款，经催收仍不履行。", legal_basis:["《中华人民共和国民法典》第六百六十七条","《中华人民共和国民法典》第六百七十四条","《中华人民共和国民法典》第三百九十四条"], amount:"1000万元", region:"上海", summary:"公司借款1000万元到期不还，法院判决偿还本息。" },
+  { id:"c037", title:"冯某非法经营案", court:"郑州市金水区人民法院", case_type:"刑事", cause:"非法经营罪", plaintiff:"检察院", defendant:"冯某", judge_date:"2024-03-25", judgment:"被告人冯某犯非法经营罪，判处有期徒刑三年，并处罚金人民币15万元。", reasoning:"被告人冯某在未取得药品经营许可证的情况下，通过微信等渠道销售各类药品，销售额达60余万元，扰乱市场秩序。", legal_basis:["《中华人民共和国刑法》第二百二十五条"], amount:"60万元", region:"河南", summary:"冯某无证销售药品60余万元被判非法经营罪。" },
+  { id:"c038", title:"某贸易公司诉某港口公司仓储合同纠纷案", court:"大连市中山区人民法院", case_type:"民事", cause:"仓储合同纠纷", plaintiff:"某贸易公司", defendant:"某港口公司", judge_date:"2024-05-06", judgment:"被告某港口公司赔偿原告某贸易公司货物损失85万元。", reasoning:"原告将一批进口木材存储在被告仓库，被告未按约定的温湿度条件进行保管，导致木材发生霉变。", legal_basis:["《中华人民共和国民法典》第九百一十七条","《中华人民共和国民法典》第九百一十八条"], amount:"85万元", region:"辽宁", summary:"港口公司未按约定条件保管致木材霉变被判赔偿85万元。" },
+  { id:"c039", title:"叶某诉某美容公司服务合同纠纷案", court:"广州市天河区人民法院", case_type:"民事", cause:"服务合同纠纷", plaintiff:"叶某", defendant:"某美容公司", judge_date:"2024-05-15", judgment:"解除服务合同，被告某美容公司退还原告叶某预存费用3.5万元。", reasoning:"原告在被告处办理美容预付卡并充值5万元，被告在提供服务过程中多次更换服务人员且服务质量明显下降。", legal_basis:["《中华人民共和国民法典》第五百六十三条","《中华人民共和国消费者权益保护法》第五十三条"], amount:"3.5万元", region:"广东", summary:"美容院服务质量下降，消费者诉请退还未消费预付款获支持。" },
+  { id:"c040", title:"某矿业公司诉某环保局行政处罚案", court:"昆明市中级人民法院", case_type:"行政", cause:"环保行政处罚", plaintiff:"某矿业公司", defendant:"某环保局", judge_date:"2024-05-20", judgment:"变更被告作出的罚款金额，由50万元变更为25万元。", reasoning:"被告以原告超标排放废水为由作出罚款50万元的行政处罚。原告虽存在违法排污行为，但被告在作出处罚时未充分考虑原告的整改情况和违法程度。", legal_basis:["《中华人民共和国行政处罚法》第五条","《中华人民共和国环境保护法》第五十九条"], amount:"25万元", region:"云南", summary:"环保局处罚未充分考虑整改情节，法院将罚款从50万降至25万。" },
+  { id:"c041", title:"某科技公司诉某员工竞业限制纠纷案", court:"深圳市中级人民法院", case_type:"民事", cause:"竞业限制纠纷", plaintiff:"某科技公司", defendant:"某员工", judge_date:"2024-06-01", judgment:"被告某员工支付原告竞业限制违约金30万元。", reasoning:"被告从原告公司离职后加入竞争对手公司，违反双方签订的竞业限制协议。原告已按约支付竞业限制补偿金。", legal_basis:["《中华人民共和国劳动合同法》第二十三条","《中华人民共和国劳动合同法》第二十四条"], amount:"30万元", region:"广东", summary:"员工违反竞业限制协议跳槽竞争对手被判支付违约金30万元。" },
+  { id:"c042", title:"邹某诉某驾校培训合同纠纷案", court:"贵阳市南明区人民法院", case_type:"民事", cause:"培训合同纠纷", plaintiff:"邹某", defendant:"某驾校", judge_date:"2024-06-10", judgment:"解除培训合同，被告某驾校退还原告邹某培训费6000元。", reasoning:"原告报名驾驶培训后，被告因经营不善暂停营业，无法继续提供培训服务。原告多次要求退费被拒。", legal_basis:["《中华人民共和国民法典》第五百六十三条","《中华人民共和国民法典》第五百七十七条"], amount:"6000元", region:"贵州", summary:"驾校停业无法继续培训被判退费。" },
+  { id:"c043", title:"白某诉某出版社著作权侵权案", court:"北京市知识产权法院", case_type:"民事", cause:"著作权侵权纠纷", plaintiff:"白某", defendant:"某出版社", judge_date:"2024-06-18", judgment:"被告某出版社赔偿原告白某经济损失及合理开支共计8万元。", reasoning:"被告未经原告许可，在其出版的教材中使用了原告享有著作权的摄影作品，且未署名、未支付报酬。", legal_basis:["《中华人民共和国著作权法》第十条","《中华人民共和国著作权法》第四十九条","《中华人民共和国著作权法》第五十三条"], amount:"8万元", region:"北京", summary:"出版社未经许可使用他人摄影作品被判侵权赔偿8万元。" },
+  { id:"c044", title:"某运输公司诉某保险公司机动车事故责任纠纷案", court:"石家庄市长安区人民法院", case_type:"民事", cause:"机动车事故责任纠纷", plaintiff:"某运输公司", defendant:"某保险公司", judge_date:"2024-06-25", judgment:"被告某保险公司在交强险和商业险范围内赔偿原告某运输公司车辆损失26万元。", reasoning:"原告车辆在高速公路上发生追尾事故，经交警认定原告负次要责任。被告以原告未及时报案为由拒绝理赔依据不足。", legal_basis:["《中华人民共和国保险法》第十四条","《中华人民共和国道路交通安全法》第七十六条"], amount:"26万元", region:"河北", summary:"保险公司以未及时报案为由拒赔，法院判决按合同赔付26万元。" },
+  { id:"c045", title:"雷某诉某公司股东知情权纠纷案", court:"上海市浦东新区人民法院", case_type:"民事", cause:"股东知情权纠纷", plaintiff:"雷某", defendant:"某公司", judge_date:"2024-07-02", judgment:"被告某公司提供自公司成立以来的股东会决议、董事会决议、财务会计报告供原告查阅、复制。", reasoning:"原告作为被告公司股东，要求查阅公司会计账簿等文件遭拒绝。原告已履行前置申请程序，其请求具有正当目的。", legal_basis:["《中华人民共和国公司法》第三十三条"], amount:"", region:"上海", summary:"公司拒绝股东查阅账簿，法院支持股东知情权行使。" },
+  { id:"c046", title:"段某诉某房产中介居间合同纠纷案", court:"天津市河西区人民法院", case_type:"民事", cause:"居间合同纠纷", plaintiff:"段某", defendant:"某房产中介", judge_date:"2024-07-10", judgment:"被告某房产中介退还原告段某居间服务费5万元。", reasoning:"被告在提供居间服务时隐瞒了涉案房屋存在抵押权的重大事实，导致原告购房后无法办理过户。被告未尽到如实告知义务。", legal_basis:["《中华人民共和国民法典》第九百六十二条","《中华人民共和国民法典》第九百六十三条"], amount:"5万元", region:"天津", summary:"中介隐瞒房屋存在抵押的事实被判退还居间费。" },
+  { id:"c047", title:"薛某走私普通货物案", court:"深圳市中级人民法院", case_type:"刑事", cause:"走私普通货物罪", plaintiff:"检察院", defendant:"薛某", judge_date:"2024-07-15", judgment:"被告人薛某犯走私普通货物罪，判处有期徒刑七年，并处罚金人民币100万元。", reasoning:"被告人薛某采用低报价格方式走私进口电子产品，偷逃应缴税额达200余万元，犯罪数额巨大。", legal_basis:["《中华人民共和国刑法》第一百五十三条"], amount:"200万元", region:"广东", summary:"薛某低报价格走私电子产品偷逃税额200余万元被判刑。" },
+  { id:"c048", title:"某酒店诉某旅行社服务合同纠纷案", court:"三亚市城郊人民法院", case_type:"民事", cause:"服务合同纠纷", plaintiff:"某酒店", defendant:"某旅行社", judge_date:"2024-07-22", judgment:"被告某旅行社支付原告某酒店住宿费用18万元。", reasoning:"被告安排旅游团入住原告酒店，双方就住宿费用进行了确认。被告以游客投诉为由扣减费用，但未提供游客投诉的有效证据。", legal_basis:["《中华人民共和国民法典》第五百七十七条"], amount:"18万元", region:"海南", summary:"旅行社以游客投诉为由拒付住宿费因证据不足被判支付。" },
+  { id:"c049", title:"某制造公司诉某环保公司设备采购合同纠纷案", court:"无锡市新吴区人民法院", case_type:"民事", cause:"设备采购合同纠纷", plaintiff:"某制造公司", defendant:"某环保公司", judge_date:"2024-08-01", judgment:"被告某环保公司支付原告设备采购款195万元。", reasoning:"原告向被告出售污水处理设备并完成安装调试，设备运行正常并通过环保验收。被告以资金紧张为由拖延付款。", legal_basis:["《中华人民共和国民法典》第六百二十六条","《中华人民共和国民法典》第五百七十七条"], amount:"195万元", region:"江苏", summary:"环保公司以资金紧张为由拖延支付设备款被判付款。" },
+  { id:"c050", title:"余某诉某物业公司财产损害赔偿纠纷案", court:"武汉市江汉区人民法院", case_type:"民事", cause:"财产损害赔偿纠纷", plaintiff:"余某", defendant:"某物业公司", judge_date:"2024-08-10", judgment:"被告某物业公司赔偿原告余某财产损失4.5万元。", reasoning:"原告停放在小区停车位的车辆被楼上坠落的外墙瓷砖砸坏，物业公司未及时维修存在安全隐患的外墙。", legal_basis:["《中华人民共和国民法典》第一千二百五十三条"], amount:"4.5万元", region:"湖北", summary:"小区外墙脱落砸坏车辆，物业公司因未及时维修被判赔偿。" },
+  { id:"c051", title:"曾某受贿案", court:"南京市中级人民法院", case_type:"刑事", cause:"受贿罪", plaintiff:"检察院", defendant:"曾某", judge_date:"2024-08-15", judgment:"被告人曾某犯受贿罪，判处有期徒刑十年，并处罚金人民币80万元；违法所得予以追缴。", reasoning:"被告人曾某利用职务便利，为他人谋取利益，收受他人财物共计价值人民币400余万元。", legal_basis:["《中华人民共和国刑法》第三百八十五条","《中华人民共和国刑法》第三百八十六条","《中华人民共和国刑法》第三百八十三条"], amount:"400万元", region:"江苏", summary:"曾某利用职务便利受贿400余万元被判十年有期徒刑。" },
+  { id:"c052", title:"某餐饮公司诉某食材供应商买卖合同纠纷案", court:"成都市锦江区人民法院", case_type:"民事", cause:"买卖合同纠纷", plaintiff:"某餐饮公司", defendant:"某食材供应商", judge_date:"2024-08-22", judgment:"解除合同，被告某食材供应商退还原告货款12万元并赔偿损失3万元。", reasoning:"被告向原告供应的冷冻肉品经检验不符合食品安全标准。原告要求退货退款并赔偿损失。", legal_basis:["《中华人民共和国食品安全法》第一百四十八条","《中华人民共和国民法典》第五百六十三条"], amount:"15万元", region:"四川", summary:"供应商供应不合格冷冻肉品，餐饮公司获退赔15万元。" },
+  { id:"c053", title:"蔡某诉某网贷平台借款合同纠纷案", court:"长沙市开福区人民法院", case_type:"民事", cause:"借款合同纠纷", plaintiff:"蔡某", defendant:"某网贷平台", judge_date:"2024-09-01", judgment:"确认原告蔡某与被告之间的借款利率超过法定上限，超过部分无效，被告应返还多收利息3.2万元。", reasoning:"被告向原告发放贷款时约定的综合年化利率达42%，超过一年期贷款市场报价利率的四倍，超出部分依法不予保护。", legal_basis:["《中华人民共和国民法典》第六百八十条","《最高人民法院关于审理民间借贷案件适用法律若干问题的规定》第二十五条"], amount:"3.2万元", region:"湖南", summary:"网贷平台利率超过法定上限，超出部分被判无效。" },
+  { id:"c054", title:"某科技公司诉某员工专利权属纠纷案", court:"北京市知识产权法院", case_type:"民事", cause:"专利权属纠纷", plaintiff:"某科技公司", defendant:"某员工", judge_date:"2024-09-10", judgment:"确认涉案发明专利权归原告某科技公司所有。", reasoning:"被告在原告公司任职期间完成的发明创造，与本职工作密切相关，且利用了原告的物质技术条件，属于职务发明创造。", legal_basis:["《中华人民共和国专利法》第六条","《中华人民共和国专利法实施细则》第十二条"], amount:"", region:"北京", summary:"员工在职期间发明属职务发明，专利权归公司所有。" },
+  { id:"c055", title:"夏某诉某直播平台网络服务合同纠纷案", court:"杭州市滨江区人民法院", case_type:"民事", cause:"网络服务合同纠纷", plaintiff:"夏某", defendant:"某直播平台", judge_date:"2024-09-18", judgment:"被告某直播平台恢复原告账号，并赔偿原告损失5000元。", reasoning:"被告以原告在直播中存在违规行为为由永久封禁原告账号，但被告提供的证据不足以证明原告存在严重违规行为。", legal_basis:["《中华人民共和国民法典》第四百九十六条","《中华人民共和国民法典》第五百七十七条"], amount:"5000元", region:"浙江", summary:"直播平台证据不足永久封禁账号被判恢复并赔偿。" },
+
+	  // ====== 新增45个案例（民事15 + 刑事15 + 行政10 + 知识产权5） ======
+	  // --- 民事（15个新增）---
+	  { id:"c056", title:"董某诉某房地产经纪公司居间合同纠纷案", court:"北京市丰台区人民法院", case_type:"民事", cause:"居间合同纠纷", plaintiff:"董某", defendant:"某房地产经纪公司", judge_date:"2024-09-25", judgment:"被告某房地产经纪公司退还原告董某居间服务费3万元。", reasoning:"被告在提供居间服务时未向原告披露房屋存在违章搭建的事实，导致交易无法完成。", legal_basis:["《中华人民共和国民法典》第九百六十二条"], amount:"3万元", region:"北京", summary:"中介未披露房屋违建事实被判退还居间费。" },
+	  { id:"c057", title:"曹某诉某健身公司服务合同纠纷案", court:"上海市长宁区人民法院", case_type:"民事", cause:"服务合同纠纷", plaintiff:"曹某", defendant:"某健身公司", judge_date:"2024-10-08", judgment:"解除健身服务合同，被告某健身公司退还原告曹某会员费1.2万元。", reasoning:"被告在收取原告两年会员费后不久即关闭门店，导致原告无法继续享受健身服务。", legal_basis:["《中华人民共和国民法典》第五百六十三条","《中华人民共和国消费者权益保护法》第五十三条"], amount:"1.2万元", region:"上海", summary:"健身房收会费后关店，会员获退1.2万元。" },
+	  { id:"c058", title:"范某诉某摄影公司肖像权纠纷案", court:"广州市越秀区人民法院", case_type:"民事", cause:"肖像权纠纷", plaintiff:"范某", defendant:"某摄影公司", judge_date:"2024-10-15", judgment:"被告某摄影公司赔偿原告范某精神损害抚慰金2万元，并删除所有侵权照片。", reasoning:"被告未经原告同意将其拍摄的个人写真用于商业宣传，侵犯了原告的肖像权。", legal_basis:["《中华人民共和国民法典》第一千零一十八条","《中华人民共和国民法典》第一千零一十九条"], amount:"2万元", region:"广东", summary:"摄影公司擅用客户写真做商业宣传被判侵权赔偿。" },
+	  { id:"c059", title:"许某诉某家政公司服务合同纠纷案", court:"成都市青羊区人民法院", case_type:"民事", cause:"服务合同纠纷", plaintiff:"许某", defendant:"某家政公司", judge_date:"2024-10-22", judgment:"解除合同，被告某家政公司退还原告许某服务费8000元。", reasoning:"被告提供的月嫂服务人员不具备合同约定的专业技能，且存在虐待婴儿的行为。", legal_basis:["《中华人民共和国民法典》第五百七十七条"], amount:"8000元", region:"四川", summary:"月嫂服务不达标且有虐待行为，家政公司被判退费。" },
+	  { id:"c060", title:"某科技公司诉某员工劳动争议案", court:"杭州市西湖区人民法院", case_type:"民事", cause:"劳动争议", plaintiff:"某科技公司", defendant:"某员工", judge_date:"2024-10-30", judgment:"驳回原告某科技公司的全部诉讼请求，被告某员工无需返还竞业限制补偿金。", reasoning:"原告要求被告返还竞业限制补偿金，但因原告未按约定支付足额补偿金，被告不受竞业限制约束。", legal_basis:["《中华人民共和国劳动合同法》第二十三条"], amount:"0元", region:"浙江", summary:"公司未足额支付竞业补偿金，员工不受竞业限制约束。" },
+	  { id:"c061", title:"姚某诉某婚介公司服务合同纠纷案", court:"武汉市武昌区人民法院", case_type:"民事", cause:"服务合同纠纷", plaintiff:"姚某", defendant:"某婚介公司", judge_date:"2024-11-05", judgment:"被告某婚介公司退还原告姚某服务费2.5万元。", reasoning:"被告承诺提供高端婚介服务但实际安排的见面对象与原告要求严重不符，构成违约。", legal_basis:["《中华人民共和国民法典》第五百七十七条"], amount:"2.5万元", region:"湖北", summary:"婚介公司安排对象与承诺不符被判退费。" },
+	  { id:"c062", title:"某物流公司诉某食品公司运输合同纠纷案", court:"郑州市管城回族区人民法院", case_type:"民事", cause:"运输合同纠纷", plaintiff:"某物流公司", defendant:"某食品公司", judge_date:"2024-11-12", judgment:"被告某食品公司支付原告运输费用15万元及逾期付款利息。", reasoning:"原告按约为被告运输货物，被告以货物部分损坏为由拒付全部运费。但原告证明损坏系因被告包装不当所致。", legal_basis:["《中华人民共和国民法典》第八百零九条","《中华人民共和国民法典》第五百七十七条"], amount:"15万元", region:"河南", summary:"食品公司以货物损坏拒付运费，因包装不当被判全额支付。" },
+	  { id:"c063", title:"乔某诉某旅游平台网络服务合同纠纷案", court:"北京市海淀区人民法院", case_type:"民事", cause:"网络服务合同纠纷", plaintiff:"乔某", defendant:"某旅游平台", judge_date:"2024-11-20", judgment:"被告某旅游平台退还原告乔某机票款3800元并赔偿损失2000元。", reasoning:"原告通过被告平台订购机票，平台在出票后单方面以价格错误为由取消订单。", legal_basis:["《中华人民共和国民法典》第四百九十一条","《中华人民共和国民法典》第五百七十七条"], amount:"5800元", region:"北京", summary:"旅游平台以价格错误为由取消已出票订单被判退赔。" },
+	  { id:"c064", title:"傅某诉某装修公司装饰装修合同纠纷案", court:"南京市鼓楼区人民法院", case_type:"民事", cause:"装饰装修合同纠纷", plaintiff:"傅某", defendant:"某装修公司", judge_date:"2024-11-28", judgment:"解除装修合同，被告某装修公司返还原告装修款18万元并赔偿损失5万元。", reasoning:"被告在装修过程中使用不合格材料且施工质量严重不达标，经鉴定存在多处安全隐患。", legal_basis:["《中华人民共和国民法典》第五百六十三条","《中华人民共和国民法典》第五百七十七条"], amount:"23万元", region:"江苏", summary:"装修公司使用不合格材料且施工质量不达标被判退赔23万元。" },
+	  { id:"c065", title:"廖某诉某银行储蓄存款合同纠纷案", court:"重庆市江北区人民法院", case_type:"民事", cause:"储蓄存款合同纠纷", plaintiff:"廖某", defendant:"某银行", judge_date:"2024-12-05", judgment:"被告某银行赔偿原告廖某存款损失12万元。", reasoning:"原告银行卡被他人盗刷12万元，银行未能证明原告存在过错，且未及时采取有效措施防止损失扩大。", legal_basis:["《中华人民共和国商业银行法》第六条","《中华人民共和国民法典》第五百七十七条"], amount:"12万元", region:"重庆", summary:"银行卡被盗刷，银行未尽安全保障义务被判赔偿。" },
+	  { id:"c066", title:"孔某诉某二手车公司买卖合同纠纷案", court:"济南市市中区人民法院", case_type:"民事", cause:"买卖合同纠纷", plaintiff:"孔某", defendant:"某二手车公司", judge_date:"2024-12-10", judgment:"撤销买卖合同，被告某二手车公司退还原告孔某购车款15万元并三倍赔偿45万元。", reasoning:"被告隐瞒车辆曾发生重大事故的事实，将事故车当作正常车出售，构成欺诈。", legal_basis:["《中华人民共和国消费者权益保护法》第五十五条"], amount:"60万元", region:"山东", summary:"二手车公司隐瞒事故车真相被判退一赔三共60万元。" },
+	  { id:"c067", title:"金某诉某亲子鉴定机构侵权责任纠纷案", court:"合肥市庐阳区人民法院", case_type:"民事", cause:"侵权责任纠纷", plaintiff:"金某", defendant:"某亲子鉴定机构", judge_date:"2024-12-18", judgment:"被告某亲子鉴定机构赔偿原告金某精神损害抚慰金5万元。", reasoning:"被告因管理疏漏将原告的亲子鉴定报告泄露给第三方，造成原告家庭关系紧张和名誉受损。", legal_basis:["《中华人民共和国民法典》第一千零三十二条","《中华人民共和国民法典》第一千一百六十五条"], amount:"5万元", region:"安徽", summary:"亲子鉴定机构泄露鉴定报告被判赔偿精神损害5万元。" },
+	  { id:"c068", title:"周某诉某宠物医院医疗服务合同纠纷案", court:"长沙市天心区人民法院", case_type:"民事", cause:"医疗服务合同纠纷", plaintiff:"周某", defendant:"某宠物医院", judge_date:"2025-01-05", judgment:"被告某宠物医院赔偿原告周某宠物死亡损失8000元。", reasoning:"被告在为原告宠物猫进行绝育手术时操作不当导致宠物死亡，存在医疗过错。", legal_basis:["《中华人民共和国民法典》第一千二百一十八条"], amount:"8000元", region:"湖南", summary:"宠物医院手术操作不当致宠物死亡被判赔偿。" },
+	  { id:"c069", title:"曾某诉某快递公司运输合同纠纷案", court:"福州市仓山区人民法院", case_type:"民事", cause:"运输合同纠纷", plaintiff:"曾某", defendant:"某快递公司", judge_date:"2025-01-12", judgment:"被告某快递公司赔偿原告曾某保价货物损失3.5万元。", reasoning:"原告邮寄价值5万元的电子产品并保价3.5万元，货物在运输中损毁。被告仅同意按运费的3倍赔偿。", legal_basis:["《中华人民共和国民法典》第八百三十二条","《中华人民共和国民法典》第八百三十三条"], amount:"3.5万元", region:"福建", summary:"快递公司损毁保价货物被判按保价金额赔偿。" },
+	  { id:"c070", title:"某广告公司诉某食品公司广告合同纠纷案", court:"天津市和平区人民法院", case_type:"民事", cause:"广告合同纠纷", plaintiff:"某广告公司", defendant:"某食品公司", judge_date:"2025-01-20", judgment:"被告某食品公司支付原告广告服务费45万元。", reasoning:"原告为被告策划并执行了线上线下推广活动，投放效果达到合同约定标准。被告以销售额未达预期为由拒绝全额付款。", legal_basis:["《中华人民共和国民法典》第五百七十七条","《中华人民共和国民法典》第五百七十九条"], amount:"45万元", region:"天津", summary:"广告公司按约完成推广服务，食品公司以销售额未达标拒付费被判支付。" },
+
+	  // --- 刑事（15个新增）---
+	  { id:"c071", title:"韩某抢劫案", court:"昆明市中级人民法院", case_type:"刑事", cause:"抢劫罪", plaintiff:"检察院", defendant:"韩某", judge_date:"2024-10-12", judgment:"被告人韩某犯抢劫罪，判处有期徒刑五年，并处罚金人民币2万元。", reasoning:"被告人韩某伙同他人持械抢劫便利店，抢得现金5000余元及价值3000元商品。系初犯，认罪认罚。", legal_basis:["《中华人民共和国刑法》第二百六十三条"], amount:"8000元", region:"云南", summary:"韩某伙同他人持械抢劫便利店被判五年有期徒刑。" },
+	  { id:"c072", title:"于某贩卖毒品案", court:"广州市白云区人民法院", case_type:"刑事", cause:"贩卖毒品罪", plaintiff:"检察院", defendant:"于某", judge_date:"2024-10-25", judgment:"被告人于某犯贩卖毒品罪，判处有期徒刑七年，并处罚金人民币3万元。", reasoning:"被告人于某多次向他人贩卖冰毒共计约20克，其行为构成贩卖毒品罪。", legal_basis:["《中华人民共和国刑法》第三百四十七条"], amount:"", region:"广东", summary:"于某多次贩卖冰毒共计20克被判七年有期徒刑。" },
+	  { id:"c073", title:"沈某寻衅滋事案", court:"北京市东城区人民法院", case_type:"刑事", cause:"寻衅滋事罪", plaintiff:"检察院", defendant:"沈某", judge_date:"2024-11-03", judgment:"被告人沈某犯寻衅滋事罪，判处有期徒刑一年六个月。", reasoning:"被告人沈某在公共场所随意殴打他人致二人轻微伤，且任意损毁公私财物价值5000元，情节严重。", legal_basis:["《中华人民共和国刑法》第二百九十三条"], amount:"5000元", region:"北京", summary:"沈某公共场所随意打人毁物被判寻衅滋事罪。" },
+	  { id:"c074", title:"蒋某强奸案", court:"武汉市中级人民法院", case_type:"刑事", cause:"强奸罪", plaintiff:"检察院", defendant:"蒋某", judge_date:"2024-11-15", judgment:"被告人蒋某犯强奸罪，判处有期徒刑四年。", reasoning:"被告人蒋某利用同事关系将被害人灌醉后实施强奸。被害人及时报案，DNA鉴定证实被告人犯罪行为。", legal_basis:["《中华人民共和国刑法》第二百三十六条"], amount:"", region:"湖北", summary:"蒋某灌醉同事后实施强奸被判四年有期徒刑。" },
+	  { id:"c075", title:"宋某故意毁坏财物案", court:"南京市秦淮区人民法院", case_type:"刑事", cause:"故意毁坏财物罪", plaintiff:"检察院", defendant:"宋某", judge_date:"2024-11-22", judgment:"被告人宋某犯故意毁坏财物罪，判处有期徒刑一年，缓刑一年六个月。", reasoning:"被告人宋某因情感纠纷砸坏他人车辆，造成损失5万余元。案后全额赔偿并取得谅解。", legal_basis:["《中华人民共和国刑法》第二百七十五条","《中华人民共和国刑法》第七十二条"], amount:"5万元", region:"江苏", summary:"宋某因情感纠纷砸车泄愤，因全额赔偿被判缓刑。" },
+	  { id:"c076", title:"林某组织卖淫案", court:"深圳市宝安区人民法院", case_type:"刑事", cause:"组织卖淫罪", plaintiff:"检察院", defendant:"林某", judge_date:"2024-12-01", judgment:"被告人林某犯组织卖淫罪，判处有期徒刑六年，并处罚金人民币10万元。", reasoning:"被告人林某通过招募、雇佣等手段组织多名女性从事卖淫活动，从中牟利达30余万元。", legal_basis:["《中华人民共和国刑法》第三百五十八条"], amount:"30万元", region:"广东", summary:"林某组织多人卖淫牟利30余万元被判六年有期徒刑。" },
+	  { id:"c077", title:"黄某帮助信息网络犯罪活动案", court:"成都市武侯区人民法院", case_type:"刑事", cause:"帮助信息网络犯罪活动罪", plaintiff:"检察院", defendant:"黄某", judge_date:"2024-12-10", judgment:"被告人黄某犯帮助信息网络犯罪活动罪，判处有期徒刑二年，并处罚金人民币2万元。", reasoning:"被告人黄某明知他人利用信息网络实施犯罪，仍为其提供银行卡用于支付结算，涉案金额达80余万元。", legal_basis:["《中华人民共和国刑法》第二百八十七条之二"], amount:"80万元", region:"四川", summary:"黄某为网络犯罪提供银行卡帮助支付结算被判刑。" },
+	  { id:"c078", title:"秦某冒充军人招摇撞骗案", court:"西安市莲湖区人民法院", case_type:"刑事", cause:"冒充军人招摇撞骗罪", plaintiff:"检察院", defendant:"秦某", judge_date:"2024-12-18", judgment:"被告人秦某犯冒充军人招摇撞骗罪，判处有期徒刑三年。", reasoning:"被告人秦某冒充军队高级军官身份，骗取多人信任并获取财物共计15万余元。", legal_basis:["《中华人民共和国刑法》第三百七十二条"], amount:"15万元", region:"陕西", summary:"秦某冒充军官身份骗取15万余元被判刑。" },
+	  { id:"c079", title:"彭某非法持有枪支案", court:"长沙市雨花区人民法院", case_type:"刑事", cause:"非法持有枪支罪", plaintiff:"检察院", defendant:"彭某", judge_date:"2025-01-05", judgment:"被告人彭某犯非法持有枪支罪，判处有期徒刑三年，缓刑四年。", reasoning:"被告人彭某非法持有以压缩气体为动力的非军用枪支2支，经鉴定具有致伤力。", legal_basis:["《中华人民共和国刑法》第一百二十八条"], amount:"", region:"湖南", summary:"彭某非法持有2支气枪被判缓刑。" },
+	  { id:"c080", title:"苏某拒不支付劳动报酬案", court:"郑州市金水区人民法院", case_type:"刑事", cause:"拒不支付劳动报酬罪", plaintiff:"检察院", defendant:"苏某", judge_date:"2025-01-12", judgment:"被告人苏某犯拒不支付劳动报酬罪，判处有期徒刑一年，并处罚金人民币1万元。", reasoning:"被告人苏某作为公司法定代表人，拖欠18名员工工资共计25万余元，经劳动监察部门责令支付仍不支付。", legal_basis:["《中华人民共和国刑法》第二百七十六条之一"], amount:"25万元", region:"河南", summary:"苏某拖欠18名员工工资25万余元拒不支付被判刑。" },
+	  { id:"c081", title:"丁某妨害公务案", court:"上海市浦东新区人民法院", case_type:"刑事", cause:"妨害公务罪", plaintiff:"检察院", defendant:"丁某", judge_date:"2025-01-20", judgment:"被告人丁某犯妨害公务罪，判处有期徒刑十个月。", reasoning:"被告人丁某在交警依法处理交通事故时暴力阻碍执法，致一名辅警轻微伤。", legal_basis:["《中华人民共和国刑法》第二百七十七条"], amount:"", region:"上海", summary:"丁某暴力阻碍交警执法致辅警受伤被判妨害公务罪。" },
+	  { id:"c082", title:"曹某非法吸收公众存款案", court:"宁波市鄞州区人民法院", case_type:"刑事", cause:"非法吸收公众存款罪", plaintiff:"检察院", defendant:"曹某", judge_date:"2025-02-01", judgment:"被告人曹某犯非法吸收公众存款罪，判处有期徒刑四年，并处罚金人民币15万元。", reasoning:"被告人曹某以投资影视项目为名，承诺高额回报，向社会公众非法吸收资金共计300余万元。", legal_basis:["《中华人民共和国刑法》第一百七十六条"], amount:"300万元", region:"浙江", summary:"曹某以影视投资为名非法吸存300余万元被判刑。" },
+	  { id:"c083", title:"叶某侵犯公民个人信息案", court:"厦门市思明区人民法院", case_type:"刑事", cause:"侵犯公民个人信息罪", plaintiff:"检察院", defendant:"叶某", judge_date:"2025-02-10", judgment:"被告人叶某犯侵犯公民个人信息罪，判处有期徒刑二年，并处罚金人民币5万元。", reasoning:"被告人叶某通过非法手段获取公民个人信息共计5万余条，出售给他人用于电话推销，获利3万元。", legal_basis:["《中华人民共和国刑法》第二百五十三条之一"], amount:"3万元", region:"福建", summary:"叶某非法获取并出售5万余条公民个人信息被判刑。" },
+	  { id:"c084", title:"袁某挪用资金案", court:"青岛市市南区人民法院", case_type:"刑事", cause:"挪用资金罪", plaintiff:"检察院", defendant:"袁某", judge_date:"2025-02-18", judgment:"被告人袁某犯挪用资金罪，判处有期徒刑三年，缓刑五年；退赔全部挪用资金。", reasoning:"被告人袁某利用担任公司财务经理的职务便利，挪用公司资金50万元用于个人炒股，案发前已全部归还。", legal_basis:["《中华人民共和国刑法》第二百七十二条"], amount:"50万元", region:"山东", summary:"袁某挪用公司50万元炒股，因全部归还被判缓刑。" },
+	  { id:"c085", title:"潘某生产销售有毒有害食品案", court:"重庆市渝北区人民法院", case_type:"刑事", cause:"生产销售有毒有害食品罪", plaintiff:"检察院", defendant:"潘某", judge_date:"2025-02-25", judgment:"被告人潘某犯生产销售有毒有害食品罪，判处有期徒刑五年，并处罚金人民币30万元。", reasoning:"被告人潘某在火锅底料中添加罂粟壳成分，销售金额达20余万元，严重危害消费者健康。", legal_basis:["《中华人民共和国刑法》第一百四十四条"], amount:"20万元", region:"重庆", summary:"潘某在火锅底料中添加罂粟壳被判刑五年并处罚金30万元。" },
+
+	  // --- 行政（10个新增）---
+	  { id:"c086", title:"李某诉某市场监管局行政处罚案", court:"北京市第一中级人民法院", case_type:"行政", cause:"市场监管行政处罚", plaintiff:"李某", defendant:"某市场监管局", judge_date:"2024-10-15", judgment:"撤销被告某市场监管局作出的罚款10万元的行政处罚决定。", reasoning:"被告以原告销售侵犯注册商标专用权商品为由作出处罚，但未能充分证明原告具有主观故意。", legal_basis:["《中华人民共和国行政诉讼法》第七十条"], amount:"10万元", region:"北京", summary:"市场监管局处罚证据不足，法院撤销罚款决定。" },
+	  { id:"c087", title:"王某诉某交警支队交通处罚案", court:"上海市静安区人民法院", case_type:"行政", cause:"交通行政处罚", plaintiff:"王某", defendant:"某交警支队", judge_date:"2024-10-28", judgment:"撤销被告作出的吊销驾驶证的行政处罚决定。", reasoning:"被告以原告醉酒驾驶为由吊销驾驶证，但原告血液酒精含量检测程序存在违法之处。", legal_basis:["《中华人民共和国行政诉讼法》第七十条"], amount:"", region:"上海", summary:"交警支队执法程序违法，法院撤销吊销驾照决定。" },
+	  { id:"c088", title:"某公司诉某住建局建设工程规划许可案", court:"广州市天河区人民法院", case_type:"行政", cause:"规划许可纠纷", plaintiff:"某公司", defendant:"某住建局", judge_date:"2024-11-08", judgment:"撤销被告作出的不予许可决定，责令被告在30日内重新作出决定。", reasoning:"被告以规划调整为由不予续期建设工程规划许可证，但未提供规划调整的正式文件依据。", legal_basis:["《中华人民共和国行政诉讼法》第七十二条","《中华人民共和国行政许可法》第三十八条"], amount:"", region:"广东", summary:"住建局无依据不予续期规划许可被责令重新处理。" },
+	  { id:"c089", title:"张某诉某街道办政府信息公开案", court:"杭州市拱墅区人民法院", case_type:"行政", cause:"政府信息公开纠纷", plaintiff:"张某", defendant:"某街道办", judge_date:"2024-11-22", judgment:"责令被告在法定期限内对原告的信息公开申请予以书面答复。", reasoning:"原告申请公开辖区内旧城改造项目的补偿方案，被告收到申请后逾期未作任何答复。", legal_basis:["《中华人民共和国政府信息公开条例》第三十三条"], amount:"", region:"浙江", summary:"街道办对信息公开申请逾期不答复被责令限期答复。" },
+	  { id:"c090", title:"赵某诉某税务局税务处理案", court:"武汉市江岸区人民法院", case_type:"行政", cause:"税务行政处理", plaintiff:"赵某", defendant:"某税务局", judge_date:"2024-12-05", judgment:"变更被告作出的税务处理决定，将应补缴税款由35万元变更为22万元。", reasoning:"被告在计算原告个人所得税时，未将原告的合法成本费用予以扣除，导致应纳税额计算错误。", legal_basis:["《中华人民共和国税收征收管理法》第八十八条"], amount:"13万元", region:"湖北", summary:"税务局未扣除合法成本费用，法院调整补税金额。" },
+	  { id:"c091", title:"某公司诉某生态环境局环保处罚案", court:"南京市玄武区人民法院", case_type:"行政", cause:"环保行政处罚", plaintiff:"某公司", defendant:"某生态环境局", judge_date:"2025-01-05", judgment:"撤销被告作出的责令停产停业的行政处罚决定。", reasoning:"被告以原告排放超标为由作出停产处罚，但检测报告显示原告排放指标在标准范围内。主要证据不足。", legal_basis:["《中华人民共和国行政诉讼法》第七十条"], amount:"", region:"江苏", summary:"生态环境局检测报告有误导致处罚不当被撤销。" },
+	  { id:"c092", title:"马某诉某镇政府土地确权案", court:"郑州市惠济区人民法院", case_type:"行政", cause:"土地确权纠纷", plaintiff:"马某", defendant:"某镇政府", judge_date:"2025-01-15", judgment:"撤销被告作出的土地权属争议处理决定，责令重新作出处理。", reasoning:"被告在处理原告与第三人之间的土地权属争议时，未进行充分的实地调查取证，认定事实不清。", legal_basis:["《中华人民共和国土地管理法》第十四条","《中华人民共和国行政诉讼法》第七十条"], amount:"", region:"河南", summary:"镇政府土地确权认定事实不清被撤销重作。" },
+	  { id:"c093", title:"钱某诉某民政局婚姻登记案", court:"长沙市芙蓉区人民法院", case_type:"行政", cause:"婚姻登记纠纷", plaintiff:"钱某", defendant:"某民政局", judge_date:"2025-01-22", judgment:"撤销被告作出的婚姻登记行为（结婚登记）。", reasoning:"原告的身份证被他人冒用办理结婚登记，被告在办理登记时未严格审查申请人身份信息。", legal_basis:["《中华人民共和国民法典》第一千零四十九条","《婚姻登记条例》第七条"], amount:"", region:"湖南", summary:"民政局未严格审查身份信息致他人冒用登记被撤销。" },
+	  { id:"c094", title:"刘某诉某教育局学位授予案", court:"成都市武侯区人民法院", case_type:"行政", cause:"学位授予纠纷", plaintiff:"刘某", defendant:"某教育局", judge_date:"2025-02-05", judgment:"责令被告对原告的学位授予申请依法重新作出处理决定。", reasoning:"被告以原告在校期间受到记过处分为由拒绝授予学位，但该处分在毕业前已被撤销。", legal_basis:["《中华人民共和国学位条例》第二条","《中华人民共和国行政诉讼法》第七十二条"], amount:"", region:"四川", summary:"教育局以已撤销处分为由拒授学位被责令重作。" },
+	  { id:"c095", title:"韩某诉某社保局工伤保险待遇案", court:"沈阳市沈河区人民法院", case_type:"行政", cause:"工伤保险待遇纠纷", plaintiff:"韩某", defendant:"某社保局", judge_date:"2025-02-15", judgment:"责令被告支付原告工伤保险待遇共计18.5万元。", reasoning:"原告在工作中受伤被认定为工伤，但被告以用人单位未按时缴纳工伤保险费为由拒绝支付工伤保险待遇。", legal_basis:["《工伤保险条例》第三十条","《工伤保险条例》第三十三条"], amount:"18.5万元", region:"辽宁", summary:"社保局以单位欠费为由拒付工伤待遇被责令支付。" },
+
+	  // --- 知识产权（5个新增）---
+	  { id:"c096", title:"某科技公司诉某软件公司计算机软件著作权侵权案", court:"北京市知识产权法院", case_type:"知识产权", cause:"计算机软件著作权侵权纠纷", plaintiff:"某科技公司", defendant:"某软件公司", judge_date:"2024-10-20", judgment:"被告某软件公司停止侵权并赔偿原告经济损失及合理开支共计120万元。", reasoning:"被告未经许可复制、修改并销售原告享有著作权的企业管理软件，经司法鉴定两款软件核心代码相似度达85%。", legal_basis:["《中华人民共和国著作权法》第十条","《计算机软件保护条例》第二十四条"], amount:"120万元", region:"北京", summary:"软件公司抄袭原告企业管理软件被判赔120万元。" },
+	  { id:"c097", title:"某服饰公司诉某电商平台商标侵权案", court:"杭州市中级人民法院", case_type:"知识产权", cause:"商标侵权纠纷", plaintiff:"某服饰公司", defendant:"某电商平台", judge_date:"2024-11-15", judgment:"被告某电商平台删除侵权链接并赔偿原告经济损失50万元。", reasoning:"被告平台上的多家店铺销售假冒原告注册商标的服装，原告多次投诉后被告未及时采取必要措施。", legal_basis:["《中华人民共和国商标法》第五十七条","《中华人民共和国电子商务法》第四十二条"], amount:"50万元", region:"浙江", summary:"电商平台未及时处理假冒商品投诉被判承担连带责任。" },
+	  { id:"c098", title:"某生物科技公司诉某制药公司发明专利侵权案", court:"上海市知识产权法院", case_type:"知识产权", cause:"发明专利侵权纠纷", plaintiff:"某生物科技公司", defendant:"某制药公司", judge_date:"2024-12-08", judgment:"被告某制药公司停止侵权并赔偿原告经济损失200万元。", reasoning:"被告未经许可使用原告拥有的基因检测技术发明专利生产相关试剂盒，构成专利侵权。", legal_basis:["《中华人民共和国专利法》第十一条","《中华人民共和国专利法》第六十五条"], amount:"200万元", region:"上海", summary:"制药公司擅用原告专利技术生产试剂盒被判赔200万元。" },
+	  { id:"c099", title:"某动漫公司诉某游戏公司著作权侵权及不正当竞争案", court:"广州市知识产权法院", case_type:"知识产权", cause:"著作权侵权及不正当竞争纠纷", plaintiff:"某动漫公司", defendant:"某游戏公司", judge_date:"2025-01-10", judgment:"被告某游戏公司停止侵权并赔偿原告经济损失80万元。", reasoning:"被告开发的手机游戏中的角色形象、场景设计等与原告享有著作权的动画作品实质性相似，且利用原告作品知名度进行宣传。", legal_basis:["《中华人民共和国著作权法》第十条","《中华人民共和国反不正当竞争法》第六条"], amount:"80万元", region:"广东", summary:"游戏公司抄袭动画角色形象被判赔偿80万元。" },
+	  { id:"c100", title:"某食品公司诉某调味品公司外观设计专利侵权案", court:"长沙市中级人民法院", case_type:"知识产权", cause:"外观设计专利侵权纠纷", plaintiff:"某食品公司", defendant:"某调味品公司", judge_date:"2025-02-20", judgment:"被告某调味品公司停止生产销售侵权产品并赔偿原告经济损失30万元。", reasoning:"被告生产销售的调味品包装瓶与原告已获授权的外观设计专利在整体视觉效果上无实质性差异，落入专利保护范围。", legal_basis:["《中华人民共和国专利法》第五十九条","《中华人民共和国专利法》第六十五条"], amount:"30万元", region:"湖南", summary:"调味品公司包装瓶仿冒原告外观设计专利被判赔30万元。" }
+	];
+
+// ============================================================
+// 状态
+// ============================================================
+let currentIndex = 0;
+
+// ============================================================
+// 初始化
+// ============================================================
+function init() {
+  document.getElementById('totalCases').textContent = CASES.length;
+  const regions = [...new Set(CASES.map(c => c.region))].sort();
+  const sel = document.getElementById('regionFilter');
+  regions.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o); });
+  search();
+}
+
+function search() {
+  const query = document.getElementById('searchInput').value.trim().toLowerCase();
+  const type = document.getElementById('typeFilter').value;
+  const region = document.getElementById('regionFilter').value;
+
+  const filtered = CASES.filter(c => {
+    if (type && c.case_type !== type) return false;
+    if (region && c.region !== region) return false;
+    if (query) {
+      const text = (c.title + c.cause + c.plaintiff + c.defendant + c.court + c.summary + c.judgment).toLowerCase();
+      return text.includes(query);
+    }
+    return true;
+  });
+
+  document.getElementById('resultCount').textContent = filtered.length;
+  document.getElementById('caseCount').textContent = filtered.length + ' 条';
+  renderResults(filtered);
+}
+
+function renderResults(cases) {
+  const el = document.getElementById('resultList');
+  const query = document.getElementById('searchInput').value.trim();
+  if (cases.length === 0) {
+    el.innerHTML = '<div class="text-center py-12 text-slate-400"><i class="fa fa-search text-4xl mb-3 block text-slate-200"></i><p class="text-sm">未找到匹配案例</p></div>';
+    return;
+  }
+  const favs = getFavorites();
+  el.innerHTML = cases.map(c => {
+    const title = query ? highlightText(c.title, query) : c.title;
+    const summary = query ? highlightText(c.summary, query) : c.summary;
+    const isFav = favs.includes(c.id);
+    const isComp = isInCompare(c.id);
+    return `<div class="case-card bg-white rounded-lg border border-slate-100 p-4 hover:border-blue-200" onclick="showDetail('${c.id}')">
+      <div class="flex items-start justify-between gap-2">
+        <h4 class="font-bold text-slate-800 text-sm flex-1">${title}</h4>
+        <div class="flex items-center gap-1">
+          <button onclick="event.stopPropagation(); toggleFavorite('${c.id}')" class="text-sm ${isFav ? 'text-yellow-500' : 'text-slate-300'} hover:text-yellow-500"><i class="fa fa-star"></i></button>
+          <button onclick="event.stopPropagation(); toggleCompare('${c.id}')" class="text-sm ${isComp ? 'text-green-500' : 'text-slate-300'} hover:text-green-500"><i class="fa fa-columns"></i></button>
+          <span class="tag tag-${c.case_type === '民事' ? 'minshi' : c.case_type === '刑事' ? 'xingshi' : c.case_type === '行政' ? 'xingzheng' : 'zhishi'} flex-shrink-0">${c.case_type}</span>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2 text-xs text-slate-500 mt-2">
+        <span><i class="fa fa-gavel mr-1"></i>${c.cause}</span>
+        <span><i class="fa fa-map-marker mr-1"></i>${c.region}</span>
+        <span><i class="fa fa-calendar mr-1"></i>${c.judge_date}</span>
+        <span><i class="fa fa-institution mr-1"></i>${c.court.slice(0, 10)}</span>
+      </div>
+      <p class="text-xs text-slate-600 mt-2 line-clamp-2">${summary}</p>
+    </div>`;
+  }).join('');
+}
+
+function highlightText(text, query) {
+  if (!query) return text;
+  const idx = text.toLowerCase().indexOf(query);
+  if (idx < 0) return text;
+  return text.substring(0, idx) + '<span class="highlight">' + text.substring(idx, idx + query.length) + '</span>' + text.substring(idx + query.length);
+}
+
+function showDetail(id) {
+  const c = CASES.find(x => x.id === id);
+  if (!c) return;
+  currentIndex = CASES.indexOf(c);
+  const query = document.getElementById('searchInput').value.trim();
+  const title = query ? highlightText(c.title, query) : c.title;
+  const summary = query ? highlightText(c.summary, query) : c.summary;
+
+  // 获取同类案例
+  const similar = CASES.filter(x => x.id !== c.id && (x.case_type === c.case_type || x.cause === c.cause || x.region === c.region)).slice(0, 5);
+
+  document.getElementById('detailArea').innerHTML = `
+    <div class="text-sm">
+      <h2 class="text-lg font-bold text-slate-800 mb-2">${title}</h2>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <span class="tag tag-${c.case_type === '民事' ? 'minshi' : c.case_type === '刑事' ? 'xingshi' : c.case_type === '行政' ? 'xingzheng' : 'zhishi'}">${c.case_type}</span>
+        <span class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">${c.cause}</span>
+        <span class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">${c.region}</span>
+      </div>
+
+      <div class="detail-section border-blue-400">
+        <p class="text-xs text-blue-600 font-medium mb-1"><i class="fa fa-info-circle mr-1"></i>案情摘要</p>
+        <p class="text-slate-700 text-sm">${summary}</p>
+      </div>
+
+      <div class="detail-section border-green-400">
+        <p class="text-xs text-green-600 font-medium mb-1"><i class="fa fa-gavel mr-1"></i>判决要点</p>
+        <p class="text-slate-700 text-sm">${c.judgment}</p>
+      </div>
+
+      <div class="detail-section border-amber-400">
+        <p class="text-xs text-amber-600 font-medium mb-1"><i class="fa fa-book mr-1"></i>裁判理由</p>
+        <p class="text-slate-700 text-sm">${c.reasoning}</p>
+      </div>
+
+      <div class="detail-section border-purple-400">
+        <p class="text-xs text-purple-600 font-medium mb-1"><i class="fa fa-legal mr-1"></i>引用法条</p>
+        <ul class="text-sm text-slate-700 space-y-1">
+          ${c.legal_basis.map(l => `<li><i class="fa fa-caret-right text-purple-400 mr-1"></i>${l}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
+        <span><i class="fa fa-institution mr-1"></i>${c.court}</span>
+        <span><i class="fa fa-calendar mr-1"></i>${c.judge_date}</span>
+        ${c.amount ? `<span><i class="fa fa-money mr-1"></i>涉及金额：${c.amount}</span>` : ''}
+        <span><i class="fa fa-user mr-1"></i>${c.plaintiff} v ${c.defendant}</span>
+      </div>
+
+      ${similar.length > 0 ? `
+      <div class="mt-4 pt-3 border-t border-slate-100">
+        <p class="text-xs text-slate-500 font-medium mb-2"><i class="fa fa-link mr-1"></i>同类案例推荐</p>
+        <div class="space-y-1.5">
+          ${similar.map(s => `<div class="reco-card bg-slate-50 rounded p-2 text-xs text-slate-700 hover:bg-blue-50" onclick="showDetail('${s.id}')">
+            <span class="font-medium">${s.title}</span>
+            <span class="text-slate-400"> - ${s.cause} (${s.judge_date})</span>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+    </div>
+  `;
+}
+
+function resetSearch() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('typeFilter').value = '';
+  document.getElementById('regionFilter').value = '';
+  search();
+}
+
+// ============================================================
+// 收藏功能
+// ============================================================
+let favorites = JSON.parse(localStorage.getItem('courtFavorites') || '[]');
+
+function getFavorites() {
+  return JSON.parse(localStorage.getItem('courtFavorites') || '[]');
+}
+
+function toggleFavorite(id) {
+  const favorites = getFavorites();
+  const idx = favorites.indexOf(id);
+  if (idx >= 0) {
+    favorites.splice(idx, 1);
+  } else {
+    favorites.push(id);
+  }
+  localStorage.setItem('courtFavorites', JSON.stringify(favorites));
+  renderResults(CASES.filter(c => {
+    const type = document.getElementById('typeFilter').value;
+    const region = document.getElementById('regionFilter').value;
+    const query = document.getElementById('searchInput').value.trim().toLowerCase();
+    if (type && c.case_type !== type) return false;
+    if (region && c.region !== region) return false;
+    if (query) {
+      const text = (c.title + c.cause + c.plaintiff + c.defendant + c.court + c.summary + c.judgment).toLowerCase();
+      return text.includes(query);
+    }
+    return true;
+  }));
+  updateFavoriteCount();
+}
+
+function isFavorite(id) {
+  return getFavorites().includes(id);
+}
+
+function updateFavoriteCount() {
+  // 可以在导航栏显示收藏数量
+}
+
+function showFavorites() {
+  const favorites = getFavorites();
+  const modal = document.getElementById('favoritesModal');
+  const listEl = document.getElementById('favoritesList');
+  const emptyEl = document.getElementById('favoritesEmpty');
+
+  if (favorites.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    modal.classList.remove('hidden');
+    return;
+  }
+
+  emptyEl.classList.add('hidden');
+  const favCases = CASES.filter(c => favorites.includes(c.id));
+  listEl.innerHTML = favCases.map(c => `
+    <div class="bg-slate-50 rounded-lg p-4 border border-slate-100">
+      <div class="flex items-start justify-between gap-2">
+        <h4 class="font-bold text-slate-800 text-sm flex-1">${c.title}</h4>
+        <button onclick="toggleFavorite('${c.id}')" class="text-yellow-500 hover:text-yellow-600">
+          <i class="fa fa-star"></i>
+        </button>
+      </div>
+      <div class="flex flex-wrap gap-2 text-xs text-slate-500 mt-2">
+        <span class="tag tag-${c.case_type === '民事' ? 'minshi' : c.case_type === '刑事' ? 'xingshi' : c.case_type === '行政' ? 'xingzheng' : 'zhishi'}">${c.case_type}</span>
+        <span><i class="fa fa-gavel mr-1"></i>${c.cause}</span>
+        <span><i class="fa fa-map-marker mr-1"></i>${c.region}</span>
+      </div>
+      <p class="text-xs text-slate-600 mt-2">${c.summary}</p>
+      <button onclick="closeFavorites(); showDetail('${c.id}')" class="text-xs text-blue-600 hover:text-blue-800 mt-2"><i class="fa fa-eye mr-1"></i>查看详情</button>
+    </div>
+  `).join('');
+  modal.classList.remove('hidden');
+}
+
+function closeFavorites() {
+  document.getElementById('favoritesModal').classList.add('hidden');
+}
+
+// ============================================================
+// 对比功能
+// ============================================================
+let compareList = [];
+
+function getCompareList() {
+  return compareList;
+}
+
+function toggleCompare(id) {
+  const idx = compareList.indexOf(id);
+  if (idx >= 0) {
+    compareList.splice(idx, 1);
+  } else if (compareList.length < 3) {
+    compareList.push(id);
+  } else {
+    showToast('最多只能选择3个案例进行对比');
+    return;
+  }
+  document.getElementById('compareCount').textContent = compareList.length;
+  renderResults(CASES.filter(c => {
+    const type = document.getElementById('typeFilter').value;
+    const region = document.getElementById('regionFilter').value;
+    const query = document.getElementById('searchInput').value.trim().toLowerCase();
+    if (type && c.case_type !== type) return false;
+    if (region && c.region !== region) return false;
+    if (query) {
+      const text = (c.title + c.cause + c.plaintiff + c.defendant + c.court + c.summary + c.judgment).toLowerCase();
+      return text.includes(query);
+    }
+    return true;
+  }));
+}
+
+function isInCompare(id) {
+  return compareList.includes(id);
+}
+
+function showCompare() {
+  if (compareList.length < 2) {
+    showToast('请至少选择2个案例进行对比');
+    return;
+  }
+  const cases = CASES.filter(c => compareList.includes(c.id));
+  const modal = document.getElementById('compareModal');
+  const contentEl = document.getElementById('compareContent');
+
+  const dims = ['案件类型', '案由', '当事人', '地区', '法院', '判决日期', '判决要点', '裁判理由', '涉及金额'];
+  contentEl.innerHTML = `
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-slate-100">
+          <th class="p-3 text-left font-bold text-slate-600">对比维度</th>
+          ${cases.map(c => `<th class="p-3 text-left font-bold text-slate-600">${c.title.slice(0, 20)}...</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-slate-100">
+          <td class="p-3 font-medium text-slate-500">案件类型</td>
+          ${cases.map(c => `<td class="p-3"><span class="tag tag-${c.case_type === '民事' ? 'minshi' : c.case_type === '刑事' ? 'xingshi' : c.case_type === '行政' ? 'xingzheng' : 'zhishi'}">${c.case_type}</span></td>`).join('')}
+        </tr>
+        <tr class="border-b border-slate-100">
+          <td class="p-3 font-medium text-slate-500">案由</td>
+          ${cases.map(c => `<td class="p-3 text-slate-700">${c.cause}</td>`).join('')}
+        </tr>
+        <tr class="border-b border-slate-100">
+          <td class="p-3 font-medium text-slate-500">当事人</td>
+          ${cases.map(c => `<td class="p-3 text-slate-700">${c.plaintiff} v ${c.defendant}</td>`).join('')}
+        </tr>
+        <tr class="border-b border-slate-100">
+          <td class="p-3 font-medium text-slate-500">地区</td>
+          ${cases.map(c => `<td class="p-3 text-slate-700">${c.region}</td>`).join('')}
+        </tr>
+        <tr class="border-b border-slate-100">
+          <td class="p-3 font-medium text-slate-500">法院</td>
+          ${cases.map(c => `<td class="p-3 text-slate-700">${c.court}</td>`).join('')}
+        </tr>
+        <tr class="border-b border-slate-100">
+          <td class="p-3 font-medium text-slate-500">判决日期</td>
+          ${cases.map(c => `<td class="p-3 text-slate-700">${c.judge_date}</td>`).join('')}
+        </tr>
+        <tr class="border-b border-slate-100">
+          <td class="p-3 font-medium text-slate-500">涉及金额</td>
+          ${cases.map(c => `<td class="p-3 text-slate-700">${c.amount || '无'}</td>`).join('')}
+        </tr>
+        <tr class="border-b border-slate-100">
+          <td class="p-3 font-medium text-slate-500">判决要点</td>
+          ${cases.map(c => `<td class="p-3 text-slate-700">${c.judgment.slice(0, 60)}...</td>`).join('')}
+        </tr>
+        <tr class="border-b border-slate-100">
+          <td class="p-3 font-medium text-slate-500">裁判理由</td>
+          ${cases.map(c => `<td class="p-3 text-slate-700">${c.reasoning.slice(0, 80)}...</td>`).join('')}
+        </tr>
+        <tr>
+          <td class="p-3 font-medium text-slate-500">引用法条</td>
+          ${cases.map(c => `<td class="p-3 text-slate-700">${c.legal_basis.slice(0, 2).join('<br>')}</td>`).join('')}
+        </tr>
+      </tbody>
+    </table>
+    <div class="mt-4 flex justify-end gap-2">
+      <button onclick="clearCompare()" class="bg-slate-200 text-slate-700 px-4 py-2 rounded hover:bg-slate-300 text-sm"><i class="fa fa-trash mr-1"></i>清空选择</button>
+      <button onclick="closeCompare()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm"><i class="fa fa-check mr-1"></i>完成对比</button>
+    </div>
+  `;
+  modal.classList.remove('hidden');
+}
+
+function closeCompare() {
+  document.getElementById('compareModal').classList.add('hidden');
+}
+
+function clearCompare() {
+  compareList = [];
+  document.getElementById('compareCount').textContent = '0';
+  closeCompare();
+  search();
+}
+
+// ============================================================
+// Toast 提示
+// ============================================================
+function showToast(msg) {
+  const toast = document.createElement('div');
+  toast.className = 'fixed top-20 right-4 bg-slate-800 text-white px-4 py-2 rounded shadow-lg z-50';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+document.getElementById('searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
+</script>
+</body>
+</html>
